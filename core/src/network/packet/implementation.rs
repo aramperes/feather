@@ -107,6 +107,10 @@ impl Packet for Handshake {
         Ok(())
     }
 
+    fn needed_bytes(&self) -> usize {
+        unimplemented!()
+    }
+
     fn write_to(&self, mut buf: &mut ByteBuf) {
         unimplemented!()
     }

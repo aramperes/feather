@@ -10,7 +10,7 @@ use specs::{
 use feather_core::network::packet::{implementation::*, Packet, PacketType};
 
 use crate::entity::PlayerComponent;
-use crate::io::{NetworkIoManager, ServerToListenerMessage, ServerToWorkerMessage};
+use crate::io::{ListenerToServerMessage, NetworkIoManager, ServerToHandleMessage};
 use crate::joinhandler::JoinHandlerComponent;
 use crate::prelude::*;
 use crate::{disconnect_player_without_packet, TickCount};
@@ -79,8 +79,8 @@ impl Default for PacketQueue {
 }
 
 pub struct NetworkComponent {
-    sender: Sender<ServerToWorkerMessage>,
-    receiver: Receiver<ServerToWorkerMessage>,
+    sender: Sender<ServerToHandleMessage>,
+    receiver: Receiver<ServerToHandleMessage>,
     /// A vector of all chunks that are currently
     /// being loaded and should be sent to the player
     /// once they have been loaded.
@@ -90,8 +90,8 @@ pub struct NetworkComponent {
 
 impl NetworkComponent {
     pub fn new(
-        sender: Sender<ServerToWorkerMessage>,
-        receiver: Receiver<ServerToWorkerMessage>,
+        sender: Sender<ServerToHandleMessage>,
+        receiver: Receiver<ServerToHandleMessage>,
     ) -> Self {
         Self {
             sender,
@@ -147,7 +147,7 @@ impl<'a> System<'a> for NetworkSystem {
         // Poll for new connections
         while let Ok(msg) = ioman.receiver.try_recv() {
             match msg {
-                ServerToListenerMessage::NewClient(info) => {
+                ListenerToServerMessage::NewClient(info) => {
                     // New connection - handle it
                     info!("Accepting connection from {}", info.ip);
                     let netcomp = NetworkComponent::new(info.sender, info.receiver);
@@ -182,10 +182,10 @@ impl<'a> System<'a> for NetworkSystem {
         for (player, netcomp) in (&entities, &netcomps).join() {
             while let Ok(msg) = netcomp.receiver.try_recv() {
                 match msg {
-                    ServerToWorkerMessage::NotifyPacketReceived(packet) => {
+                    ServerToHandleMessage::NotifyPacketReceived(packet) => {
                         packet_queue.add_for_packet(player, packet);
                     }
-                    ServerToWorkerMessage::NotifyDisconnect => {
+                    ServerToHandleMessage::NotifyDisconnect => {
                         // TODO broadcast disconnect
                         lazy.exec_mut(move |world| {
                             disconnect_player_without_packet(
@@ -236,12 +236,12 @@ pub fn send_packet_to_all_players<P: Packet + Clone + 'static>(
 pub fn send_packet_to_player<P: Packet + 'static>(comp: &NetworkComponent, packet: P) {
     let _ = comp
         .sender
-        .send(ServerToWorkerMessage::SendPacket(Box::new(packet)));
+        .send(ServerToHandleMessage::SendPacket(Box::new(packet)));
 }
 
 /// Sends a packet to the given player.
 pub fn send_packet_boxed_to_player(comp: &NetworkComponent, packet: Box<dyn Packet>) {
-    let _ = comp.sender.send(ServerToWorkerMessage::SendPacket(packet));
+    let _ = comp.sender.send(ServerToHandleMessage::SendPacket(packet));
 }
 
 #[cfg(test)]
@@ -288,7 +288,7 @@ mod tests {
             receiver: recv2,
         };
 
-        let msg = ServerToListenerMessage::NewClient(new_client);
+        let msg = ListenerToServerMessage::NewClient(new_client);
         ioman.listener_sender.send(msg).unwrap();
 
         let mut event_reader = t::reader(&w);
@@ -359,7 +359,7 @@ mod tests {
 
         player
             .network_sender
-            .send(ServerToWorkerMessage::NotifyDisconnect)
+            .send(ServerToHandleMessage::NotifyDisconnect)
             .unwrap();
 
         d.dispatch(&w);

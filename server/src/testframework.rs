@@ -15,7 +15,7 @@ use feather_core::Gamemode;
 
 use crate::config::Config;
 use crate::entity::{EntityComponent, PlayerComponent};
-use crate::io::ServerToWorkerMessage;
+use crate::io::ServerToHandleMessage;
 use crate::network::{NetworkComponent, PacketQueue};
 use crate::player::InventoryComponent;
 use crate::PlayerCount;
@@ -40,8 +40,8 @@ pub fn init_world<'a, 'b>() -> (World, Dispatcher<'a, 'b>) {
 
 pub struct Player {
     pub entity: Entity,
-    pub network_sender: Sender<ServerToWorkerMessage>,
-    pub network_receiver: Receiver<ServerToWorkerMessage>,
+    pub network_sender: Sender<ServerToHandleMessage>,
+    pub network_receiver: Receiver<ServerToHandleMessage>,
 }
 
 /// Adds a player to the world, inserting
@@ -77,7 +77,7 @@ pub fn add_player(world: &mut World) -> Player {
 /// a packet of the given type, returning the packet.
 pub fn assert_packet_received(player: &Player, ty: PacketType) -> Box<dyn Packet> {
     while let Ok(msg) = player.network_receiver.try_recv() {
-        if let ServerToWorkerMessage::SendPacket(packet) = msg {
+        if let ServerToHandleMessage::SendPacket(packet) = msg {
             if packet.ty() == ty {
                 return packet;
             }
@@ -92,7 +92,7 @@ pub fn assert_packet_received(player: &Player, ty: PacketType) -> Box<dyn Packet
 /// Panics if not.
 pub fn assert_packet_not_received(player: &Player, ty: PacketType) {
     while let Ok(msg) = player.network_receiver.try_recv() {
-        if let ServerToWorkerMessage::SendPacket(packet) = msg {
+        if let ServerToHandleMessage::SendPacket(packet) = msg {
             assert_ne!(packet.ty(), ty);
         }
     }
@@ -107,7 +107,7 @@ pub fn received_packets(player: &Player, cap: Option<usize>) -> Vec<Box<dyn Pack
     let mut result = vec![];
 
     while let Ok(msg) = player.network_receiver.try_recv() {
-        if let ServerToWorkerMessage::SendPacket(pack) = msg {
+        if let ServerToHandleMessage::SendPacket(pack) = msg {
             result.push(pack);
         }
         if let Some(cap) = cap.as_ref() {
@@ -162,7 +162,7 @@ pub fn assert_not_disconnected(player: &Player) {
 pub fn send_packet<P: Packet + 'static>(player: &Player, packet: P) {
     player
         .network_sender
-        .send(ServerToWorkerMessage::NotifyPacketReceived(Box::new(
+        .send(ServerToHandleMessage::NotifyPacketReceived(Box::new(
             packet,
         )))
         .unwrap();

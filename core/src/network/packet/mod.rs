@@ -2,22 +2,32 @@
 #[allow(clippy::too_many_arguments)]
 pub mod implementation;
 
-use crate::bytebuf::ByteBuf;
-use bytes::Buf;
+use bytes::{Buf, Bytes, BytesMut};
 use hashbrown::HashMap;
 use std::any::Any;
-use std::io::Read;
-
-pub trait PacketBuf: Buf + Read {}
-impl<T: Buf + Read> PacketBuf for T {}
 
 pub trait AsAny {
     fn as_any(&self) -> &dyn Any;
 }
 
 pub trait Packet: AsAny + Send {
-    fn read_from(&mut self, buf: &mut dyn PacketBuf) -> Result<(), ()>;
-    fn write_to(&self, buf: &mut ByteBuf);
+    /// Reads this packet from a buffer.
+    ///
+    /// This function should never panic.
+    fn read_from(&mut self, buf: &mut Bytes) -> Result<(), failure::Error>;
+
+    /// Returns the number of bytes needed to write
+    /// this packet to a buffer.
+    fn needed_bytes(&self) -> usize;
+
+    /// Writes this packet to the provided buffer.
+    ///
+    /// The buffer is guaranteed to have at least `needed_bytes()`
+    /// remaining bytes.
+    fn write_to(&self, buf: &mut BytesMut);
+
+    /// Returns the type of this packet, which is
+    /// used to identify the packet's ID.
     fn ty(&self) -> PacketType;
 }
 

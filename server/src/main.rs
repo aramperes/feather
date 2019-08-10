@@ -3,6 +3,7 @@
 // doesn't seem to like this.
 #![allow(clippy::type_complexity)]
 #![forbid(unsafe_code)]
+#![feature(async_await)]
 
 #[macro_use]
 extern crate log;
@@ -18,6 +19,8 @@ extern crate num_derive;
 extern crate smallvec;
 #[macro_use]
 extern crate lazy_static;
+#[macro_use]
+extern crate futures_preview;
 
 use std::alloc::System;
 use std::sync::atomic::{AtomicUsize, Ordering};

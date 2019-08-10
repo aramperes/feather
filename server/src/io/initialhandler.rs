@@ -28,7 +28,7 @@ use feather_core::network::packet::implementation::{
     DisconnectLogin, EncryptionRequest, EncryptionResponse, Handshake, HandshakeState, LoginStart,
     LoginSuccess, Ping, Pong, Request, Response, SetCompression,
 };
-use feather_core::network::packet::{Packet, PacketType};
+use feather_core::network::packet::{Packet, PacketStage, PacketType};
 
 use crate::config::Config;
 use crate::{PlayerCount, PROTOCOL_VERSION, SERVER_VERSION};
@@ -59,6 +59,7 @@ pub enum Action {
     SendPacket(Box<dyn Packet>),
     Disconnect,
     JoinGame(JoinResult),
+    UpdateStage(PacketStage),
 }
 
 /// The type returned for when a player has completed the login process.

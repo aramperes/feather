@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
@@ -10,8 +12,9 @@ extern crate serde;
 extern crate feather_codegen;
 #[macro_use]
 extern crate num_derive;
+#[macro_use]
+extern crate failure;
 
-pub mod bytebuf;
 pub mod entitymeta;
 pub mod inventory;
 pub mod network;
