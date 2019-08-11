@@ -8,6 +8,8 @@ use std::io::{Cursor, Read, Write};
 
 /// The maximum size, in bytes, of a VarInt.
 pub const MAX_VAR_INT_SIZE: usize = 5;
+/// The maximum size, in bytes, of a Slot.
+pub const MAX_SLOT_SIZE: usize = MAX_VAR_INT_SIZE + 3;
 
 /// An error which occurred when getting a Minecraft
 /// type.

@@ -3,8 +3,9 @@
 //! for the specification.
 
 use crate::bytebuf::{BufMutAlloc, ByteBuf};
-use crate::network::mctypes::McTypeWrite;
+use crate::network::mctypes::{McTypeWrite, MAX_VAR_INT_SIZE};
 use crate::world::BlockPosition;
+use bytes::{BufMut, TryGetError};
 use hashbrown::HashMap;
 use uuid::Uuid;
 
@@ -49,6 +50,33 @@ impl MetaEntry {
             MetaEntry::Particle => 15,
         }
     }
+
+    pub fn size(&self) -> usize {
+        match self {
+            MetaEntry::Byte(_) => 1,
+            MetaEntry::VarInt(_) => MAX_VAR_INT_SIZE,
+            MetaEntry::Float(_) => 4,
+            MetaEntry::String(s) => MAX_VAR_INT_SIZE + s.as_bytes().len(),
+            MetaEntry::Chat(s) => MAX_VAR_INT_SIZE + s.as_bytes().len(),
+            MetaEntry::OptChat(o) => {
+                if let Some(s) = o.as_ref() {
+                    MAX_VAR_INT_SIZE + s.as_bytes().len()
+                } else {
+                    MAX_VAR_INT_SIZE
+                }
+            }
+            MetaEntry::Slot => MAX_VAR_INT_SIZE + 3,
+            MetaEntry::Boolean(_) => 1,
+            MetaEntry::Rotation(_, _, _) => 12,
+            MetaEntry::Position(_) => 8,
+            MetaEntry::OptPosition(_) => 9,
+            MetaEntry::Direction(_) => MAX_VAR_INT_SIZE,
+            MetaEntry::OptUuid(_) => 17,
+            MetaEntry::OptBlockId(_) => MAX_VAR_INT_SIZE,
+            MetaEntry::Nbt => unimplemented!(),
+            MetaEntry::Particle => unimplemented!(),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -70,6 +98,14 @@ impl EntityMetadata {
 
         self
     }
+
+    pub fn size(&self) -> usize {
+        let mut count = 1;
+        for (_, entry) in &self.values {
+            count += 1 + MAX_VAR_INT_SIZE + entry.size()
+        }
+        count
+    }
 }
 
 impl Default for EntityMetadata {
@@ -79,71 +115,71 @@ impl Default for EntityMetadata {
 }
 
 pub trait EntityMetaIo {
-    fn write_metadata(&mut self, meta: &EntityMetadata);
-    fn read_metadata(&mut self) -> EntityMetadata;
+    fn put_metadata(&mut self, meta: &EntityMetadata);
+    fn try_get_metadata(&mut self) -> Result<EntityMetadata, TryGetError>;
 }
 
-impl EntityMetaIo for ByteBuf {
-    fn write_metadata(&mut self, meta: &EntityMetadata) {
+impl<T: BufMut> EntityMetaIo for T {
+    fn put_metadata(&mut self, meta: &EntityMetadata) {
         for (index, entry) in meta.values.iter() {
-            self.write_u8(*index);
-            self.write_var_int(entry.id());
+            self.put_u8(*index);
+            self.put_var_int(entry.id());
             write_entry_to_buf(entry, self);
         }
 
-        self.write_u8(0xff); // End of metadata
+        self.put_u8(0xff); // End of metadata
     }
 
-    fn read_metadata(&mut self) -> EntityMetadata {
+    fn try_get_metadata(&mut self) -> Result<EntityMetadata, TryGetError> {
         unimplemented!()
     }
 }
 
-fn write_entry_to_buf(entry: &MetaEntry, buf: &mut ByteBuf) {
+fn write_entry_to_buf<T: BufMut>(entry: &MetaEntry, buf: &mut T) {
     match entry {
-        MetaEntry::Byte(x) => buf.write_i8(*x),
-        MetaEntry::VarInt(x) => buf.write_var_int(*x),
-        MetaEntry::Float(x) => buf.write_f32_be(*x),
-        MetaEntry::String(x) => buf.write_string(x),
-        MetaEntry::Chat(x) => buf.write_string(x),
+        MetaEntry::Byte(x) => buf.put_i8(*x),
+        MetaEntry::VarInt(x) => buf.put_var_int(*x),
+        MetaEntry::Float(x) => buf.put_f32(*x),
+        MetaEntry::String(x) => buf.put_string(x),
+        MetaEntry::Chat(x) => buf.put_string(x),
         MetaEntry::OptChat(ox) => {
             if let Some(x) = ox {
-                buf.write_bool(true);
-                buf.write_string(x);
+                buf.put_bool(true);
+                buf.put_string(x);
             } else {
-                buf.write_bool(false);
+                buf.put_bool(false);
             }
         }
         MetaEntry::Slot => unimplemented!(),
-        MetaEntry::Boolean(x) => buf.write_bool(*x),
+        MetaEntry::Boolean(x) => buf.put_bool(*x),
         MetaEntry::Rotation(x, y, z) => {
-            buf.write_f32_be(*x);
-            buf.write_f32_be(*y);
-            buf.write_f32_be(*z);
+            buf.put_f32(*x);
+            buf.put_f32(*y);
+            buf.put_f32(*z);
         }
-        MetaEntry::Position(x) => buf.write_position(x),
+        MetaEntry::Position(x) => buf.put_block_position(x),
         MetaEntry::OptPosition(ox) => {
             if let Some(x) = ox {
-                buf.write_bool(true);
-                buf.write_position(x);
+                buf.put_bool(true);
+                buf.put_block_position(x);
             } else {
-                buf.write_bool(false);
+                buf.put_bool(false);
             }
         }
-        MetaEntry::Direction(x) => buf.write_var_int(x.id()),
+        MetaEntry::Direction(x) => buf.put_var_int(x.id()),
         MetaEntry::OptUuid(ox) => {
             if let Some(x) = ox {
-                buf.write_bool(true);
-                buf.write_uuid(x);
+                buf.put_bool(true);
+                buf.put_uuid(x);
             } else {
-                buf.write_bool(false);
+                buf.put_bool(false);
             }
         }
         MetaEntry::OptBlockId(ox) => {
             if let Some(x) = ox {
-                buf.write_var_int(*x);
+                buf.put_var_int(*x);
             } else {
-                buf.write_var_int(0); // No value implies air
+                buf.put_var_int(0); // No value implies air
             }
         }
         MetaEntry::Nbt => unimplemented!(),
